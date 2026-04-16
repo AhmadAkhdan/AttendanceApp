@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, FlatList, Alert } from "react-native";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, FlatList, Alert, TextInput } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 
 const initialHistory = [
@@ -12,6 +12,9 @@ const Home = () => {
   const [historyData, setHistoryData] = useState(initialHistory);
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [currentTime, setCurrentTime] = useState("Memuat jam...");
+  
+  const [note, setNote] = useState("");
+  const noteInputRef = useRef(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -24,9 +27,24 @@ const Home = () => {
     return () => clearInterval(timer);
   }, []);
 
+  const attendanceStats = useMemo(() => {
+    console.log("Menghitung ulang statistik kehadiran..."); // Cek terminal saat Check In
+    const presentCount = historyData.filter(item => item.status === "Present").length;
+    const absentCount = historyData.filter(item => item.status === "Absent").length;
+    return { totalPresent: presentCount, totalAbsent: absentCount };
+  }, [historyData]);
+
   const handleCheckIn = () => {
     if (isCheckedIn) {
       Alert.alert("Perhatian", "Anda sudah melakukan Check In untuk kelas ini.");
+      return;
+    }
+
+    if (note.trim() === '') {
+      Alert.alert("Peringatan", "Catatan kehadiran wajib diisi!");
+      if (noteInputRef.current) {
+        noteInputRef.current.focus();
+      }
       return;
     }
 
@@ -41,9 +59,6 @@ const Home = () => {
     setIsCheckedIn(true);
     Alert.alert("Sukses", `Berhasil Check In pada pukul ${currentTime}`);
   };
-
-  const presentCount = historyData.filter(item => item.status === "Present").length;
-  const absentCount = historyData.filter(item => item.status === "Absent").length;
 
   const renderItem = ({ item }) => (
     <View style={styles.item}>
@@ -90,6 +105,17 @@ const Home = () => {
           <Text>Mobile Programming</Text>
           <Text>08:00 - 10:00</Text>
           <Text>Lab 3</Text>
+          
+          {!isCheckedIn && (
+            <TextInput
+              ref={noteInputRef}
+              style={styles.inputCatatan}
+              placeholder="Tulis catatan (cth: Hadir lab)"
+              value={note}
+              onChangeText={setNote}
+            />
+          )}
+
           <TouchableOpacity 
             style={[styles.button, isCheckedIn ? styles.buttonDisabled : styles.buttonActive]}
             onPress={handleCheckIn}
@@ -108,10 +134,15 @@ const Home = () => {
           <Text>Lab 4</Text>
         </View>
 
-        <View style={styles.classCard}>
-          <Text style={styles.subtitle}>Attendance Summary</Text>
-          <Text style={styles.summaryText}>Present: {presentCount}</Text>
-          <Text style={styles.summaryText}>Absent: {absentCount}</Text>
+        <View style={styles.statsCard}>
+          <View style={styles.statBox}>
+            <Text style={styles.statNumber}>{attendanceStats.totalPresent}</Text>
+            <Text style={styles.statLabel}>Total Present</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={[styles.statNumber, { color: 'red' }]}>{attendanceStats.totalAbsent}</Text>
+            <Text style={styles.statLabel}>Total Absent</Text>
+          </View>
         </View>
 
         <Text style={styles.subtitle}>Attendance History</Text>
@@ -229,9 +260,34 @@ const styles = StyleSheet.create({
     color: "red",
     fontWeight: "bold",
   },
-  summaryText: {
-    fontSize: 16,
-    marginBottom: 4,
+  // Style Baru untuk Komponen Hooks
+  inputCatatan: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    padding: 10,
+    marginTop: 15,
+    backgroundColor: '#fafafa',
+  },
+  statsCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  statBox: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'green',
+  },
+  statLabel: {
+    fontSize: 14,
+    color: 'gray',
   }
 });
 
