@@ -1,5 +1,46 @@
-import Home from "./pages/Home";
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { MaterialIcons } from '@expo/vector-icons';
+
+import Home from './pages/Home';
+import HistoryScreen from './pages/HistoryScreen';
+import DetailScreen from './pages/DetailScreen';
+
+const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
+
+function HistoryStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen name="HistoryList" component={HistoryScreen} options={{ title: 'Riwayat Absensi' }} />
+      <Stack.Screen name="Detail" component={DetailScreen} options={{ title: 'Detail Informasi' }} />
+    </Stack.Navigator>
+  );
+}
 
 export default function App() {
-  return <Home />;
+  return (
+    <NavigationContainer>
+      <Tab.Navigator screenOptions={{ tabBarActiveTintColor: '#007AFF', headerShown: false }}>
+        <Tab.Screen 
+          name="HomeTab" 
+          component={Home} 
+          options={{
+            tabBarLabel: 'Beranda',
+            tabBarIcon: ({ color }) => <MaterialIcons name="home" size={24} color={color} />
+          }} 
+        />
+        <Tab.Screen 
+          name="HistoryTab" 
+          component={HistoryStack} 
+          options={{
+            tabBarLabel: 'Riwayat',
+            tabBarIcon: ({ color }) => <MaterialIcons name="history" size={24} color={color} />
+          }} 
+        />
+      </Tab.Navigator>
+    </NavigationContainer>
+  );
 }
