@@ -1,15 +1,61 @@
-import React, { useState } from "react";
-import { View, Text, SafeAreaView, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from "react";
+import { 
+  View, 
+  Text, 
+  SafeAreaView, 
+  StyleSheet, 
+  FlatList, 
+  TouchableOpacity, 
+  ActivityIndicator 
+} from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
-const initialHistory = [
-  { id: "1", course: "Mobile Programming", date: "13/4/2026", status: "Present", room: "Lab 3", lecturer: "Bpk. Andi" },
-  { id: "2", course: "Database System", date: "14/4/2026", status: "Present", room: "Lab 4", lecturer: "Ibu Rina" },
-  { id: "3", course: "Machine Learning", date: "14/4/2026", status: "Absent", room: "Lab 1", lecturer: "Bpk. Budi" },
-];
-
 export default function HistoryScreen({ navigation }) {
-  const [historyData] = useState(initialHistory);
+  const [historyData, setHistoryData] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+
+  const fetchAttendanceData = (isInitial = false) => {
+    if (isLoading) return;
+    
+    setIsLoading(true);
+
+    setTimeout(() => {
+      const newItems = [];
+      const startIdx = isInitial ? 0 : historyData.length;
+
+      for (let i = 1; i <= 10; i++) {
+        newItems.push({
+          id: (startIdx + i).toString(),
+          course: `Mata Kuliah #${startIdx + i}`,
+          date: "2026-04-14",
+          status: i % 3 === 0 ? "Absent" : "Present",
+          room: "Lab 3",
+          lecturer: "Dosen Pengampu"
+        });
+      }
+
+      setHistoryData(isInitial ? newItems : [...historyData, ...newItems]);
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }, 1500);
+  };
+
+  useEffect(() => {
+    fetchAttendanceData(true);
+  }, []);
+
+  const onRefresh = () => {
+    setIsRefreshing(true);
+    fetchAttendanceData(true);
+  };
+
+  const handleLoadMore = () => {
+    if (historyData.length >= 10 && !isLoading) {
+      fetchAttendanceData(false);
+    }
+  };
 
   const renderItem = ({ item }) => (
     <TouchableOpacity
@@ -20,20 +66,22 @@ export default function HistoryScreen({ navigation }) {
         <Text style={styles.course}>{item.course}</Text>
         <Text style={styles.date}>{item.date}</Text>
       </View>
-      <View style={styles.statusContainer}>
-        <MaterialIcons 
-          name={item.status === "Present" ? "check-box" : "disabled-by-default"} 
-          size={18} 
-          color={item.status === "Present" ? "green" : "red"} 
-          style={{ marginRight: 5 }}
-        />
-        <Text style={item.status === "Present" ? styles.present : styles.absent}>
-          {item.status}
-        </Text>
-        <MaterialIcons name="chevron-right" size={24} color="#999" style={{ marginLeft: 10 }} />
-      </View>
+      <Text style={item.status === "Present" ? styles.present : styles.absent}>
+        {item.status}
+      </Text>
+      <MaterialIcons name="chevron-right" size={24} color="#999" style={{ marginLeft: 10 }} />
     </TouchableOpacity>
   );
+
+  const renderFooter = () => {
+    if (!isLoading) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color="#0056A0" />
+        <Text style={styles.loaderText}>Memuat riwayat lama...</Text>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -42,6 +90,15 @@ export default function HistoryScreen({ navigation }) {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.content}
+        
+        refreshing={isRefreshing}
+        onRefresh={onRefresh}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={renderFooter}
+        ListEmptyComponent={
+          !isLoading && <Text style={styles.emptyText}>Tidak ada riwayat.</Text>
+        }
       />
     </SafeAreaView>
   );
@@ -50,10 +107,25 @@ export default function HistoryScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F5F5F5" },
   content: { padding: 20 },
-  item: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "white", padding: 15, borderRadius: 10, marginBottom: 10, elevation: 2 },
+  item: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    backgroundColor: "white",
+    padding: 15, 
+    borderRadius: 8, 
+    marginBottom: 10, 
+    elevation: 2 
+  },
   course: { fontSize: 16, fontWeight: "bold", color: "#333" },
   date: { fontSize: 12, color: "gray", marginTop: 4 },
-  statusContainer: { flexDirection: "row", alignItems: "center" },
-  present: { color: "green", fontWeight: "bold" },
-  absent: { color: "red", fontWeight: "bold" }
+  present: { color: "green", fontWeight: "bold", marginRight: 5 },
+  absent: { color: "red", fontWeight: "bold", marginRight: 5 },
+  footerLoader: { 
+    paddingVertical: 20, 
+    alignItems: 'center', 
+    flexDirection: 'row', 
+    justifyContent: 'center' 
+  },
+  loaderText: { marginLeft: 10, color: '#666', fontSize: 12 },
+  emptyText: { textAlign: 'center', marginTop: 50, color: '#999' }
 });
