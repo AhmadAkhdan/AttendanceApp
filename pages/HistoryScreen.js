@@ -1,59 +1,69 @@
-import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  SafeAreaView, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  ActivityIndicator 
-} from 'react-native';
+import React, { useState, useCallback, useContext } from 'react';
+import { View, Text, SafeAreaView, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { AuthContext } from '../context/AuthContext';
 
 export default function HistoryScreen({ navigation }) {
+  const { userData } = useContext(AuthContext);
+
   const [historyData, setHistoryData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [page, setPage] = useState(1);
 
-  const fetchAttendanceData = (isInitial = false) => {
-    if (isLoading) return;
-    
+  // Pagination State
+  const [page, setPage] = useState(0);
+  const [isLastPage, setIsLastPage] = useState(false);
+
+  // URL Backend (Pakai IP Laptop)
+  const BASE_URL = "http://192.168.1.106:8080/api/presensi";
+
+  // FUNGSI GET API DENGAN PAGINATION
+  const fetchAttendanceData = async (targetPage = 0) => {
+    if (isLoading || (isLastPage && targetPage !== 0)) return;
+
     setIsLoading(true);
 
-    setTimeout(() => {
-      const newItems = [];
-      const startIdx = isInitial ? 0 : historyData.length;
+    try {
+      // Memanggil API Spring Boot
+      const response = await fetch(`${BASE_URL}/history/${userData.nim_mhs}?page=${targetPage}&size=10`);
+      const json = await response.json();
 
-      for (let i = 1; i <= 10; i++) {
-        newItems.push({
-          id: (startIdx + i).toString(),
-          course: `Mata Kuliah #${startIdx + i}`,
-          date: "2026-04-14",
-          status: i % 3 === 0 ? "Absent" : "Present",
-          room: "Lab 3",
-          lecturer: "Dosen Pengampu"
-        });
+      // Spring Boot Pageable menyimpan array di dalam properti 'content'
+      const newItems = json.content;
+
+      if (targetPage === 0) {
+        setHistoryData(newItems); // Refresh halaman awal
+      } else {
+        setHistoryData(prev => [...prev, ...newItems]); // Append (Load More)
       }
 
-      setHistoryData(isInitial ? newItems : [...historyData, ...newItems]);
+      setPage(targetPage);
+      setIsLastPage(json.last); // 'last' adalah boolean dari Spring Boot
+
+    } catch (error) {
+      console.error("Gagal tarik data:", error);
+    } finally {
       setIsLoading(false);
       setIsRefreshing(false);
-    }, 1500);
+    }
   };
 
-  useEffect(() => {
-    fetchAttendanceData(true);
-  }, []);
+  // Otomatis refresh saat Tab History dibuka
+  useFocusEffect(
+    useCallback(() => {
+      fetchAttendanceData(0);
+    }, [])
+  );
 
   const onRefresh = () => {
     setIsRefreshing(true);
-    fetchAttendanceData(true);
+    fetchAttendanceData(0);
   };
 
   const handleLoadMore = () => {
-    if (historyData.length >= 10 && !isLoading) {
-      fetchAttendanceData(false);
+    if (!isLastPage && !isLoading) {
+      fetchAttendanceData(page + 1);
     }
   };
 
@@ -64,9 +74,9 @@ export default function HistoryScreen({ navigation }) {
     >
       <View style={{ flex: 1 }}>
         <Text style={styles.course}>{item.course}</Text>
-        <Text style={styles.date}>{item.date}</Text>
+        <Text style={styles.date}>{item.date} | {item.jamPresensi}</Text>
       </View>
-      <Text style={item.status === "Present" ? styles.present : styles.absent}>
+      <Text style={item.status === "Present" ? styles.present : item.status === "Late" ? styles.late : styles.absent}>
         {item.status}
       </Text>
       <MaterialIcons name="chevron-right" size={24} color="#999" style={{ marginLeft: 10 }} />
@@ -77,8 +87,8 @@ export default function HistoryScreen({ navigation }) {
     if (!isLoading) return null;
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color="#0056A0" />
-        <Text style={styles.loaderText}>Memuat riwayat lama...</Text>
+        <ActivityIndicator size="small" color="#007AFF" />
+        <Text style={styles.loaderText}>Menarik data dari server...</Text>
       </View>
     );
   };
@@ -87,17 +97,16 @@ export default function HistoryScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <FlatList
         data={historyData}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item, index) => item.id ? item.id.toString() : index.toString()}
         renderItem={renderItem}
         contentContainerStyle={styles.content}
-        
         refreshing={isRefreshing}
         onRefresh={onRefresh}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={
-          !isLoading && <Text style={styles.emptyText}>Tidak ada riwayat.</Text>
+          !isLoading && <Text style={styles.emptyText}>Tidak ada riwayat absensi.</Text>
         }
       />
     </SafeAreaView>
@@ -105,27 +114,15 @@ export default function HistoryScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5F5F5" },
+  container: { flex: 1, backgroundColor: '#F5F5F5' },
   content: { padding: 20 },
-  item: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    backgroundColor: "white",
-    padding: 15, 
-    borderRadius: 8, 
-    marginBottom: 10, 
-    elevation: 2 
-  },
-  course: { fontSize: 16, fontWeight: "bold", color: "#333" },
-  date: { fontSize: 12, color: "gray", marginTop: 4 },
-  present: { color: "green", fontWeight: "bold", marginRight: 5 },
-  absent: { color: "red", fontWeight: "bold", marginRight: 5 },
-  footerLoader: { 
-    paddingVertical: 20, 
-    alignItems: 'center', 
-    flexDirection: 'row', 
-    justifyContent: 'center' 
-  },
-  loaderText: { marginLeft: 10, color: '#666', fontSize: 12 },
-  emptyText: { textAlign: 'center', marginTop: 50, color: '#999' }
+  item: { flexDirection: 'row', backgroundColor: '#FFF', padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 10, elevation: 1 },
+  course: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  date: { fontSize: 14, color: '#666', marginTop: 4 },
+  present: { color: '#28A745', fontWeight: 'bold' },
+  absent: { color: '#DC3545', fontWeight: 'bold' },
+  late: { color: '#FD7E14', fontWeight: 'bold' },
+  footerLoader: { paddingVertical: 20, alignItems: 'center' },
+  loaderText: { marginTop: 10, color: '#666' },
+  emptyText: { textAlign: 'center', color: '#999', marginTop: 50, fontSize: 16 }
 });
