@@ -18,7 +18,7 @@ function HistoryStack() {
       <Stack.Screen name="HistoryList" component={HistoryScreen} options={{ title: 'Riwayat Absensi' }} />
       <Stack.Screen name="Detail" component={DetailScreen} options={{ title: 'Detail Informasi' }} />
     </Stack.Navigator>
-  );
+  );  
 }
 
 export default function App() {

@@ -1,18 +1,25 @@
 import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
-import { View, Text, SafeAreaView, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, SafeAreaView, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
+import { API_BASE_URL } from '../config/api';
+// Tambahkan import dari expo-camera
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 const Home = ({ navigation }) => {
   const { userData } = useContext(AuthContext);
 
+  // State Bawaan
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [currentTime, setCurrentTime] = useState('Memuat jam...');
   const [note, setNote] = useState('');
   const [isPosting, setIsPosting] = useState(false);
   const noteInputRef = useRef(null);
 
-  const BASE_URL = "http://192.168.1.106:8080/api/presensi";
+  // State untuk Kamera Scanner
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isScanning, setIsScanning] = useState(true);
 
   const attendanceStats = useMemo(() => {
     return { totalPresent: 12, totalAbsent: 2 };
@@ -25,31 +32,74 @@ const Home = ({ navigation }) => {
     return () => clearInterval(timer);
   }, []);
 
-  const handleCheckIn = async () => {
-    if (isCheckedIn) return Alert.alert("Perhatian", "Anda sudah Check In.");
-    if (note.trim() === '') {
-      Alert.alert("Peringatan", "Catatan kehadiran wajib diisi!");
-      if (noteInputRef.current) noteInputRef.current.focus();
-      return;
+  // Fungsi memanggil kamera
+  const openCamera = async () => {
+    if (!permission?.granted) {
+      const { granted } = await requestPermission();
+      if (!granted) {
+        Alert.alert("Akses Ditolak", "Aplikasi membutuhkan izin kamera untuk memindai QR.");
+        return;
+      }
     }
+    setIsScanning(true);
+    setIsCameraOpen(true);
+  };
 
+  // Handler saat QR Terbaca
+  const handleBarCodeScanned = ({ type, data }) => {
+    if (!isScanning) return;
+    
+    setIsScanning(false); // Kunci scanner agar tidak looping
+
+    try {
+      const qrData = JSON.parse(data); // Parsing JSON dari QR Dosen
+      
+      Alert.alert(
+        "QR Code Terdeteksi",
+        `Mata Kuliah: ${qrData.kodeMk}\nPertemuan: ${qrData.pertemuanke}\nRuangan: ${qrData.ruangan}\n\nLanjutkan Presensi (Check-In)?`,
+        [
+          {
+            text: "Batal",
+            style: "cancel",
+            onPress: () => setIsScanning(true) // Buka kunci scanner jika batal
+          },
+          {
+            text: "Ya, Check In",
+            onPress: () => {
+              setIsCameraOpen(false); // Tutup modal kamera
+              handleCheckIn(qrData); // Lanjutkan proses API
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      Alert.alert("QR Tidak Valid", "Pastikan Anda memindai QR Code Presensi Dosen.");
+      setIsScanning(true);
+    }
+  };
+
+  // Fungsi POST API (Diperbarui menerima payload dinamis dari QR)
+  const handleCheckIn = async (qrData) => {
+    if (isCheckedIn) return Alert.alert("Perhatian", "Anda sudah Check In.");
+    
     setIsPosting(true);
     const now = new Date();
 
+    // Menggabungkan data dari Context (NIM) dan hasil Scan QR
     const payload = {
-      kodeMk: "TRPL205",
-      course: "Mobile Programming",
+      kodeMk: qrData.kodeMk, 
+      course: "Mobile Programming", // Bisa disesuaikan dengan data riil
       status: "Present",
-      nimMhs: userData.nim_mhs,
-      pertemuanke: 6,
+      nimMhs: userData.nim_mhs, 
+      pertemuanke: qrData.pertemuanke,
       date: now.toISOString().split('T')[0],
       jamPresensi: now.toLocaleTimeString('id-ID', { hour12: false }),
-      ruangan: "Lab Komputer 3",
-      dosenPengampu: "Tim Dosen TRPL"
+      ruangan: qrData.ruangan,
+      catatan: note // Tambahan opsional jika di Spring Boot entity kamu ada field ini
     };
 
     try {
-      const response = await fetch(BASE_URL, {
+      const response = await fetch(API_BASE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -101,13 +151,13 @@ const Home = ({ navigation }) => {
           <Text style={styles.subtitle}>Today's Class</Text>
           <Text>Mobile Programming (TRPL205)</Text>
           <Text>08:00 - 10:00</Text>
-          <Text>Lab 3</Text>
+          <Text>Lab Komputer</Text>
 
           {!isCheckedIn && (
             <TextInput
               ref={noteInputRef}
               style={styles.inputCatatan}
-              placeholder="Tulis catatan (cth: Hadir lab)"
+              placeholder="Tulis catatan opsional..."
               value={note}
               onChangeText={setNote}
             />
@@ -118,11 +168,11 @@ const Home = ({ navigation }) => {
           ) : (
             <TouchableOpacity
               style={[styles.button, isCheckedIn ? styles.buttonDisabled : styles.buttonActive]}
-              onPress={handleCheckIn}
+              onPress={isCheckedIn ? null : openCamera} // Ubah aksi tombol
               disabled={isCheckedIn}
             >
               <Text style={styles.buttonText}>
-                {isCheckedIn ? "CHECKED IN" : "CHECK IN SEKARANG"}
+                {isCheckedIn ? "SUDAH CHECKED IN" : "SCAN QR DOSEN"}
               </Text>
             </TouchableOpacity>
           )}
@@ -140,6 +190,41 @@ const Home = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Modal Scanner QR Code yang melayang di atas aplikasi */}
+      <Modal visible={isCameraOpen} animationType="slide" transparent={false}>
+        <View style={styles.cameraContainer}>
+          <CameraView
+            style={StyleSheet.absoluteFillObject}
+            facing="back"
+            onBarcodeScanned={isScanning ? handleBarCodeScanned : undefined}
+            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+          >
+            <View style={styles.overlay}>
+              <View style={styles.unfocusedContainer}></View>
+              <View style={styles.focusedContainer}>
+                <View style={styles.borderCornerTopLeft} />
+                <View style={styles.borderCornerTopRight} />
+                <View style={styles.borderCornerBottomLeft} />
+                <View style={styles.borderCornerBottomRight} />
+              </View>
+              <View style={styles.unfocusedContainer}>
+                <Text style={styles.scanText}>Arahkan Kamera ke QR Code Dosen</Text>
+                
+                {/* Tombol darurat untuk menutup scanner/batal */}
+                <TouchableOpacity 
+                  style={{ marginTop: 20, padding: 10, backgroundColor: 'red', borderRadius: 8 }}
+                  onPress={() => setIsCameraOpen(false)}
+                >
+                  <Text style={{ color: 'white', fontWeight: 'bold' }}>Tutup Kamera</Text>
+                </TouchableOpacity>
+
+              </View>
+            </View>
+          </CameraView>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 };
@@ -163,7 +248,16 @@ const styles = StyleSheet.create({
   statsCard: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: '#FFF', padding: 15, borderRadius: 10, elevation: 2 },
   statBox: { alignItems: 'center' },
   statNumber: { fontSize: 24, fontWeight: 'bold', color: '#28A745' },
-  statLabel: { fontSize: 14, color: '#666', marginTop: 5 }
+  statLabel: { fontSize: 14, color: '#666', marginTop: 5 },
+  cameraContainer: { flex: 1, backgroundColor: 'black' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  unfocusedContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  focusedContainer: { width: 250, height: 250, alignSelf: 'center', backgroundColor: 'transparent', position: 'relative' },
+  scanText: { color: 'white', fontSize: 16, marginTop: 20, fontWeight: 'bold', backgroundColor: 'rgba(0,0,0,0.7)', padding: 10, borderRadius: 5 },
+  borderCornerTopLeft: { position: 'absolute', top: 0, left: 0, width: 40, height: 40, borderTopWidth: 5, borderLeftWidth: 5, borderColor: '#007bff' },
+  borderCornerTopRight: { position: 'absolute', top: 0, right: 0, width: 40, height: 40, borderTopWidth: 5, borderRightWidth: 5, borderColor: '#007bff' },
+  borderCornerBottomLeft: { position: 'absolute', bottom: 0, left: 0, width: 40, height: 40, borderBottomWidth: 5, borderLeftWidth: 5, borderColor: '#007bff' },
+  borderCornerBottomRight: { position: 'absolute', bottom: 0, right: 0, width: 40, height: 40, borderBottomWidth: 5, borderRightWidth: 5, borderColor: '#007bff' }
 });
 
 export default Home;

@@ -3,6 +3,7 @@ import { View, Text, SafeAreaView, StyleSheet, FlatList, TouchableOpacity, Activ
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
+import { API_BASE_URL } from '../config/api';
 
 export default function HistoryScreen({ navigation }) {
   const { userData } = useContext(AuthContext);
@@ -10,27 +11,31 @@ export default function HistoryScreen({ navigation }) {
   const [historyData, setHistoryData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Pagination State
   const [page, setPage] = useState(0);
   const [isLastPage, setIsLastPage] = useState(false);
 
-  // URL Backend (Pakai IP Laptop)
-  const BASE_URL = "http://192.168.1.106:8080/api/presensi";
-
   // FUNGSI GET API DENGAN PAGINATION
   const fetchAttendanceData = async (targetPage = 0) => {
     if (isLoading || (isLastPage && targetPage !== 0)) return;
+    if (!userData?.nim_mhs) return;
 
     setIsLoading(true);
+    setErrorMessage('');
 
     try {
       // Memanggil API Spring Boot
-      const response = await fetch(`${BASE_URL}/history/${userData.nim_mhs}?page=${targetPage}&size=10`);
+      const response = await fetch(`${API_BASE_URL}/history/${encodeURIComponent(userData.nim_mhs)}?page=${targetPage}&size=10`);
       const json = await response.json();
 
+      if (!response.ok) {
+        throw new Error(json.message || `Server mengembalikan status ${response.status}`);
+      }
+
       // Spring Boot Pageable menyimpan array di dalam properti 'content'
-      const newItems = json.content;
+      const newItems = Array.isArray(json.content) ? json.content : Array.isArray(json) ? json : [];
 
       if (targetPage === 0) {
         setHistoryData(newItems); // Refresh halaman awal
@@ -39,10 +44,11 @@ export default function HistoryScreen({ navigation }) {
       }
 
       setPage(targetPage);
-      setIsLastPage(json.last); // 'last' adalah boolean dari Spring Boot
+      setIsLastPage(typeof json.last === 'boolean' ? json.last : newItems.length < 10); // 'last' adalah boolean dari Spring Boot
 
     } catch (error) {
       console.error("Gagal tarik data:", error);
+      setErrorMessage(error.message || "Gagal mengambil data dari PresensiApi.");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -106,7 +112,11 @@ export default function HistoryScreen({ navigation }) {
         onEndReachedThreshold={0.5}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={
-          !isLoading && <Text style={styles.emptyText}>Tidak ada riwayat absensi.</Text>
+          !isLoading && (
+            <Text style={styles.emptyText}>
+              {errorMessage || "Tidak ada riwayat absensi."}
+            </Text>
+          )
         }
       />
     </SafeAreaView>
