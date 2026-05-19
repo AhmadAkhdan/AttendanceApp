@@ -8,6 +8,7 @@ import { AuthProvider } from './context/AuthContext';
 import Home from './pages/Home';
 import HistoryScreen from './pages/HistoryScreen';
 import DetailScreen from './pages/DetailScreen';
+import AboutScreen from './pages/About';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -23,10 +24,12 @@ function HistoryStack() {
 
 export default function App() {
   return (
-    // Tambahkan AuthProvider di sini untuk membungkus NavigationContainer
+    // AuthProvider membungkus seluruh aplikasi
     <AuthProvider>
       <NavigationContainer>
         <Tab.Navigator screenOptions={{ tabBarActiveTintColor: '#007AFF', headerShown: false }}>
+          
+          {/* Tab 1: Beranda */}
           <Tab.Screen 
             name="HomeTab" 
             component={Home} 
@@ -35,6 +38,8 @@ export default function App() {
               tabBarIcon: ({ color }) => <MaterialIcons name="home" size={24} color={color} />
             }} 
           />
+          
+          {/* Tab 2: Riwayat */}
           <Tab.Screen 
             name="HistoryTab" 
             component={HistoryStack} 
@@ -43,6 +48,17 @@ export default function App() {
               tabBarIcon: ({ color }) => <MaterialIcons name="history" size={24} color={color} />
             }} 
           />
+          
+          {/* Tab 3: Profil / About */}
+          <Tab.Screen 
+            name="AboutTab" 
+            component={AboutScreen} 
+            options={{
+              tabBarLabel: 'About', 
+              tabBarIcon: ({ color }) => <MaterialIcons name="person" size={24} color={color} />
+            }} 
+          />
+
         </Tab.Navigator>
       </NavigationContainer>
     </AuthProvider>

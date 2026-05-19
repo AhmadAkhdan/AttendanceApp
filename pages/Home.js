@@ -3,24 +3,20 @@ import { View, Text, SafeAreaView, StyleSheet, TouchableOpacity, ScrollView, Ale
 import { MaterialIcons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 import { API_BASE_URL } from '../config/api';
-// Tambahkan import dari expo-camera
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 const Home = ({ navigation }) => {
   const { userData } = useContext(AuthContext);
 
-  // State Bawaan
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [currentTime, setCurrentTime] = useState('Memuat jam...');
   const [note, setNote] = useState('');
   const [isPosting, setIsPosting] = useState(false);
   const noteInputRef = useRef(null);
-
   // State untuk Kamera Scanner
   const [permission, requestPermission] = useCameraPermissions();
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
-
   const attendanceStats = useMemo(() => {
     return { totalPresent: 12, totalAbsent: 2 };
   }, []);
@@ -32,7 +28,6 @@ const Home = ({ navigation }) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Fungsi memanggil kamera
   const openCamera = async () => {
     if (!permission?.granted) {
       const { granted } = await requestPermission();
@@ -45,14 +40,13 @@ const Home = ({ navigation }) => {
     setIsCameraOpen(true);
   };
 
-  // Handler saat QR Terbaca
   const handleBarCodeScanned = ({ type, data }) => {
     if (!isScanning) return;
     
-    setIsScanning(false); // Kunci scanner agar tidak looping
+    setIsScanning(false);
 
     try {
-      const qrData = JSON.parse(data); // Parsing JSON dari QR Dosen
+      const qrData = JSON.parse(data);
       
       Alert.alert(
         "QR Code Terdeteksi",
@@ -61,13 +55,13 @@ const Home = ({ navigation }) => {
           {
             text: "Batal",
             style: "cancel",
-            onPress: () => setIsScanning(true) // Buka kunci scanner jika batal
+            onPress: () => setIsScanning(true)
           },
           {
             text: "Ya, Check In",
             onPress: () => {
-              setIsCameraOpen(false); // Tutup modal kamera
-              handleCheckIn(qrData); // Lanjutkan proses API
+              setIsCameraOpen(false);
+              handleCheckIn(qrData);
             }
           }
         ]
@@ -78,24 +72,22 @@ const Home = ({ navigation }) => {
     }
   };
 
-  // Fungsi POST API (Diperbarui menerima payload dinamis dari QR)
   const handleCheckIn = async (qrData) => {
     if (isCheckedIn) return Alert.alert("Perhatian", "Anda sudah Check In.");
     
     setIsPosting(true);
     const now = new Date();
 
-    // Menggabungkan data dari Context (NIM) dan hasil Scan QR
     const payload = {
       kodeMk: qrData.kodeMk, 
-      course: "Mobile Programming", // Bisa disesuaikan dengan data riil
+      course: "Mobile Programming",
       status: "Present",
       nimMhs: userData.nim_mhs, 
       pertemuanke: qrData.pertemuanke,
       date: now.toISOString().split('T')[0],
       jamPresensi: now.toLocaleTimeString('id-ID', { hour12: false }),
       ruangan: qrData.ruangan,
-      catatan: note // Tambahan opsional jika di Spring Boot entity kamu ada field ini
+      catatan: note
     };
 
     try {
@@ -168,7 +160,7 @@ const Home = ({ navigation }) => {
           ) : (
             <TouchableOpacity
               style={[styles.button, isCheckedIn ? styles.buttonDisabled : styles.buttonActive]}
-              onPress={isCheckedIn ? null : openCamera} // Ubah aksi tombol
+              onPress={isCheckedIn ? null : openCamera}
               disabled={isCheckedIn}
             >
               <Text style={styles.buttonText}>
